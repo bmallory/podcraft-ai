@@ -36,25 +36,6 @@ graph TD
 5. **`heygenGenerator/`** & **`tiktokgenerator/`** :
    - Modules d'extension pour la génération d'avatar vidéo et la distribution automatique sur TikTok / YouTube Shorts via Buffer.
 
----
-
-## ⚙️ Configuration & Variabilisation
-
-Toutes les ressources sont centralisées dans [`.utils/config.env`](file:///home/hig/develop/docker-lambda-thematic/.utils/config.env).
-
-### Isolation garantie sur le même compte AWS :
-| Ressource AWS | Projet Original (`docker-lambda`) | Ce Projet Thématique (`docker-lambda-thematic`) |
-| :--- | :--- | :--- |
-| **Préfixe** | `autopodcast` / statique | `thematic-podcast` (ou votre préfixe personnalisé) |
-| **Bucket S3** | `mon-bucket-podcast-audio-unique-12345` | `thematic-podcast-audio-storage-eu-west-1` |
-| **ECR Repos** | `my-lambda-function-main` | `thematic-podcast-main` |
-| **Lambda Main** | `Main` ou `autopodcast` | `thematic-podcast-Main` |
-| **Lambda Shorts** | `ShortsGenerator` | `thematic-podcast-ShortsGenerator` |
-| **Lambda Spotify**| `SpotifyUploader` | `thematic-podcast-SpotifyUploader` |
-| **Step Function** | `VideoGeneratorStateMachine` | `thematic-podcast-VideoGeneratorStateMachine` |
-| **Master SFN** | `arn:...:stateMachine:...` | `thematic-podcast-PipelineStateMachine` |
-| **Secret Spotify**| `SpotifyCredentials` | `thematic-podcast-SpotifyCredentials` |
-| **Rôle IAM** | `PodcastLambdaExecutionRole` | `thematic-podcast-lambda-execution-role` |
 
 ---
 
