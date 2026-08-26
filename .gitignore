@@ -1,0 +1,35 @@
+# Secrets & Credentials
+.secret/
+!.secret/geminikey.example
+.env
+.utils/config.env
+*.pem
+*.key
+*.token
+*.txt
+!requirements.txt
+!*/requirements.txt
+
+# Generated deployment files
+VideoGenerator/step_function.json
+aws/podcast_pipeline.json
+
+# Python & Build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Media / Temporary Audio & Video
+*.pcm
+*.mp3
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.Zone.Identifier
+
+# OS & Archives
+.DS_Store
+Thumbs.db
+awscliv2.zip
+/tmp/

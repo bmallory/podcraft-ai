@@ -1,0 +1,56 @@
+{
+  "StartAt": "SplitScript",
+  "States": {
+    "SplitScript": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-VideoSplitter",
+      "Next": "CheckSkip"
+    },
+    "CheckSkip": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.skip",
+          "BooleanEquals": true,
+          "Next": "Done"
+        }
+      ],
+      "Default": "GenerateChunks"
+    },
+    "GenerateChunks": {
+      "Type": "Map",
+      "ItemsPath": "$.chunks",
+      "ResultPath": "$.chunk_results",
+      "MaxConcurrency": 1,
+      "Iterator": {
+        "StartAt": "GenerateChunk",
+        "States": {
+          "GenerateChunk": {
+            "Type": "Task",
+            "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-VideoChunkGenerator",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "States.TaskFailed"
+                ],
+                "IntervalSeconds": 10,
+                "MaxAttempts": 3,
+                "BackoffRate": 2.0
+              }
+            ],
+            "End": true
+          }
+        }
+      },
+      "Next": "AssembleVideo"
+    },
+    "AssembleVideo": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-VideoAssembler",
+      "End": true
+    },
+    "Done": {
+      "Type": "Succeed"
+    }
+  }
+}

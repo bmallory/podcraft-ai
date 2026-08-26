@@ -1,0 +1,59 @@
+{
+  "podcast": {
+    "title": "Tech & IA Horizon",
+    "host": "Alex, votre guide tech",
+    "theme": "l'Intelligence Artificielle, la robotique, les innovations technologiques et le futur du numérique",
+    "target_duration": "8 à 12 minutes",
+    "language": "FRANÇAIS",
+    "tts_voice": "Laomedeia"
+  },
+  "proxy": {
+    "enabled": false,
+    "endpoint": "[TOSET]",
+    "api_key": "[TOSET]"
+  },
+  "sources": [
+    {
+      "name": "Numerama - Intelligence Artificielle & Tech",
+      "url": "https://www.numerama.com/feed/",
+      "isRss": true,
+      "max_articles": 6,
+      "base_domain": "numerama.com"
+    },
+    {
+      "name": "01net - Actualités Tech",
+      "url": "https://www.01net.com/actualites/feed",
+      "isRss": true,
+      "max_articles": 6,
+      "base_domain": "01net.com"
+    },
+    {
+      "name": "Le Monde Informatique",
+      "url": "https://www.lemondeinformatique.fr/flux-rss/thematique/toutes-les-actualites/rss.xml",
+      "isRss": true,
+      "max_articles": 6,
+      "base_domain": "lemondeinformatique.fr"
+    },
+    {
+      "name": "Futura Sciences - Tech & IA",
+      "url": "https://www.futura-sciences.com/rss/tech/actualites.xml",
+      "isRss": true,
+      "max_articles": 6,
+      "base_domain": "futura-sciences.com"
+    },
+    {
+      "name": "Silicon.fr - Innovation IT",
+      "url": "https://www.silicon.fr/feed",
+      "isRss": true,
+      "max_articles": 6,
+      "base_domain": "silicon.fr"
+    },
+    {
+      "name": "Clubic - IA & Technologies",
+      "url": "https://www.clubic.com/feed/news.rss",
+      "isRss": true,
+      "max_articles": 6,
+      "base_domain": "clubic.com"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "Comment": "Pipeline orchestrateur pour le podcast thématique ${PROJECT_PREFIX}",
+  "StartAt": "GeneratePodcast",
+  "States": {
+    "GeneratePodcast": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-Main",
+      "ResultSelector": {
+        "s3_bucket.$": "$.s3_bucket",
+        "s3_key.$": "$.s3_key",
+        "script_key.$": "$.script_key",
+        "title.$": "$.title",
+        "timestamp.$": "$.timestamp"
+      },
+      "Next": "PublishAndPromote"
+    },
+    "PublishAndPromote": {
+      "Type": "Parallel",
+      "End": true,
+      "Branches": [
+        {
+          "StartAt": "UploadToSpotify",
+          "States": {
+            "UploadToSpotify": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-SpotifyUploader",
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 15,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "GenerateShorts",
+          "States": {
+            "GenerateShorts": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-ShortsGenerator",
+              "Next": "StartVideoWorkflow"
+            },
+            "StartVideoWorkflow": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:${AWS_REGION}:${AWS_ACCOUNT_ID}:stateMachine:${PROJECT_PREFIX}-VideoGeneratorStateMachine",
+              "End": true
+            }
+          }
+        }
+      ]
+    }
+  }
+}
