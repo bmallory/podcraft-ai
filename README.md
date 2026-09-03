@@ -67,7 +67,6 @@ SPOTIFY_SHOW_ID="spotify:show:VOTRE_SHOW_ID"
 ### 2. Déploiement en 1 seule commande
 Pour déployer l'infrastructure, toutes les images ECR, les fonctions Lambda et les Step Functions :
 ```bash
-cd /home/hig/develop/docker-lambda-thematic
 ./.utils/deploy-all.bash
 ```
 
