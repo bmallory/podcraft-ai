@@ -9,9 +9,37 @@
         "s3_bucket.$": "$.s3_bucket",
         "s3_key.$": "$.s3_key",
         "script_key.$": "$.script_key",
+        "s3_script_key.$": "$.s3_script_key",
+        "s3_sources_key.$": "$.s3_sources_key",
         "title.$": "$.title",
+        "description.$": "$.description",
         "timestamp.$": "$.timestamp"
       },
+      "Next": "AddBackgroundMusic"
+    },
+    "AddBackgroundMusic": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-AudioMixer",
+      "ResultSelector": {
+        "s3_bucket.$": "$.s3_bucket",
+        "s3_key.$": "$.s3_key",
+        "timestamp.$": "$.timestamp",
+        "title.$": "$.title",
+        "description.$": "$.description",
+        "s3_script_key.$": "$.s3_script_key",
+        "script_key.$": "$.script_key",
+        "s3_sources_key.$": "$.s3_sources_key"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
       "Next": "PublishAndPromote"
     },
     "PublishAndPromote": {
@@ -44,6 +72,14 @@
             "GenerateShorts": {
               "Type": "Task",
               "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${PROJECT_PREFIX}-ShortsGenerator",
+              "ResultSelector": {
+                "s3_bucket.$": "$.s3_bucket",
+                "s3_key.$": "$.s3_key",
+                "s3_audio_key.$": "$.s3_audio_key",
+                "s3_script_key.$": "$.s3_script_key",
+                "s3_image_key.$": "$.s3_image_key",
+                "timestamp.$": "$.timestamp"
+              },
               "Next": "StartVideoWorkflow"
             },
             "StartVideoWorkflow": {

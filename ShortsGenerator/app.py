@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import urllib.parse
 from datetime import datetime
 
@@ -7,29 +8,37 @@ import boto3
 from google import genai
 from google.genai import types
 
+
 def handler(event, context):
     print("Received event: " + json.dumps(event, indent=2))
-    
+
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
     if not gemini_api_key:
         return {'statusCode': 400, 'body': 'GEMINI_API_KEY not set'}
-    
+
     s3_client = boto3.client('s3')
     client = genai.Client(api_key=gemini_api_key)
     sf_client = boto3.client('stepfunctions')
 
     podcast_title = os.environ.get("PODCAST_TITLE", "Tech & IA Horizon")
-    summary_model = os.environ.get("GEMINI_SUMMARY_MODEL", "gemini-2.5-flash")
+    summary_model = os.environ.get("GEMINI_SUMMARY_MODEL", "gemini-3.8-flash")
+    tts_model = os.environ.get("GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview")
+    tts_voice = os.environ.get("GEMINI_TTS_VOICE", "Laomedeia")
     image_model = os.environ.get("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
     host_image_style = os.environ.get(
         "HOST_IMAGE_STYLE",
-        "un animateur de podcast tech jeune et dynamique dans un studio moderne et lumineux avec microphone professionnel"
+        "un animateur de podcast tech jeune et dynamique dans son studio moderne ou sur le terrain avec microphone professionnel, visage expressif et souriant"
     )
+
+    pcm_file_path = None
+    mp3_file_path = None
+    short_file_name = None
+    short_text_name = None
+    image_file_name = None
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     try:
         bucket = None
-        short_file_name = None
-        timestamp = None
 
         # Support both S3 trigger events and direct payload from Step Functions
         records = event.get('Records', None)
@@ -54,23 +63,23 @@ def handler(event, context):
             bucket = task['bucket']
             key = task['key']
             print(f"Processing script: {key} from bucket: {bucket}")
-            
+
             # Download the script
             response = s3_client.get_object(Bucket=bucket, Key=key)
             script_text = response['Body'].read().decode('utf-8')
-            
+
             print(f"Generating summary for Shorts using {summary_model}...")
             prompt = f"""
-Vous êtes un expert en création de contenu court et viral pour les réseaux sociaux (TikTok, YouTube Shorts, Instagram Reels).
-Voici le script d'un épisode du podcast "{podcast_title}".
-Résumez-le en un script très court, percutant et dynamique (1 minute parlée, soit environ 150 à 200 mots).
-Ce résumé doit accrocher immédiatement l'audience et l'inviter à écouter l'épisode complet.
+Transforme le script de podcast d'actualités fourni en un script vidéo ultra-court et percutant de 30 à 45 secondes (soit environ 70 à 100 mots).
 
-Mentionnez que le podcast complet est "{podcast_title}" disponible sur Spotify.
+Consignes de rédaction :
+- Accroche immédiate : Rentre directement dans le sujet dès la première seconde.
+- Contenu : Sélectionne et résume uniquement 1 ou 2 actualités marquantes, sans fioritures.
+- Appel à l'action final : Termine par une phrase incisive invitant à écouter la suite et les détails sur "{podcast_title}" sur Spotify.
 
 CONTRAINTES STRICTES DE FORMATAGE (À RESPECTER ABSOLUMENT) :
-- Contenu exclusif : Le texte généré doit contenir uniquement les paroles prononcées par la voix off.
-- Aucun crochet, aucune indication de montage ou d'effet sonore.
+- Contenu exclusif : Le texte généré doit contenir UNIQUEMENT les paroles prononcées par la voix off.
+- Interdiction formelle : Aucun crochet, aucune mention de jingle, de musique ou d'effet sonore.
 
 Script original :
 {script_text}
@@ -80,26 +89,76 @@ Script original :
                 contents=prompt
             )
             summary_text = summary_response.text
-            
+
             date_of_the_day = datetime.now().strftime("%Y-%m-%d")
             base_key_name = os.path.basename(key)
             short_text_name = f"short_{base_key_name}"
-            
-            # Upload short markdown script
+
+            # 1. Upload short markdown script
             print(f"Uploading short script {short_text_name} to {bucket}")
             s3_client.put_object(
                 Bucket=bucket,
                 Key=f"shorts/{short_text_name}",
                 Body=summary_text.encode('utf-8'),
-                ContentType='text/markdown'
+                ContentType='text/markdown; charset=utf-8'
             )
 
-            # Generate and upload the daily illustration image
+            # 2. Generate audio for the short script
+            print(f"Generating audio for Shorts using {tts_model} (voice: {tts_voice})...")
+            pcm_file_path = f"/tmp/short_raw_{timestamp}.pcm"
+            mp3_file_path = f"/tmp/short_{timestamp}.mp3"
+
+            audio_response = client.models.generate_content(
+                model=tts_model,
+                contents=summary_text,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=tts_voice,
+                            )
+                        )
+                    ),
+                )
+            )
+
+            with open(pcm_file_path, "wb") as f_pcm:
+                if audio_response.candidates and audio_response.candidates[0].content.parts:
+                    for part in audio_response.candidates[0].content.parts:
+                        if part.inline_data:
+                            f_pcm.write(part.inline_data.data)
+                            break
+
+            print("Converting short PCM to MP3 using FFmpeg...")
+            process = subprocess.Popen(
+                [
+                    '/opt/bin/ffmpeg', '-y',
+                    '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', pcm_file_path,
+                    '-f', 'mp3', '-b:a', '128k', mp3_file_path
+                ],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            stdout, stderr = process.communicate()
+            if process.returncode != 0:
+                raise Exception(f"FFmpeg failed: {stderr.decode('utf-8')}")
+
+            short_file_name = f"{date_of_the_day}_shorts.mp3"
+            print(f"Uploading short audio {short_file_name} to {bucket}")
+            with open(mp3_file_path, "rb") as f_mp3:
+                s3_client.put_object(
+                    Bucket=bucket,
+                    Key=f"shorts/{short_file_name}",
+                    Body=f_mp3,
+                    ContentType='audio/mpeg'
+                )
+
+            # 3. Generate and upload the daily illustration image
             print(f"Generating podcast illustration using {image_model}...")
             try:
                 image_prompt = os.environ.get(
                     "IMAGE_PROMPT_TEMPLATE",
-                    f"Génère une image d'illustration de podcast au format carré 1024x1024 pixels, style photoréaliste, vue de 3/4 en studio de podcast moderne. {host_image_style}. Expression enthousiaste et captivante. IMPORTANT: pas de texte incrusté, uniquement des illustrations visuelles traitant des sujets suivants : {summary_text[:1000]}"
+                    f"Génère une image d'illustration de podcast au format carré 1024x1024 pixels, style photoréaliste, vue de 3/4. {host_image_style}. IMPORTANT: pas de texte incrusté, uniquement des illustrations visuelles traitant des sujets suivants : {summary_text[:1000]}"
                 )
                 image_response = client.models.generate_content(
                     model=image_model,
@@ -124,7 +183,7 @@ Script original :
                     print(f"Uploading illustration {image_file_name} to {bucket}")
                     s3_client.put_object(
                         Bucket=bucket,
-                        Key="shorts/" + image_file_name,
+                        Key=f"shorts/{image_file_name}",
                         Body=image_bytes,
                         ContentType=mime_type
                     )
@@ -133,19 +192,47 @@ Script original :
 
         # Start Video Step Function if ARN is provided
         sfn_arn = os.environ.get("STEP_FUNCTION_ARN")
-        bucket = event.get('s3_bucket') or os.environ.get("S3_BUCKET_NAME")
+        bucket = bucket or event.get('s3_bucket') or os.environ.get("S3_BUCKET_NAME")
         if sfn_arn and bucket:
             print(f"Starting Video Step Function execution: {sfn_arn}")
             sfn_input = {
                 "bucket": bucket,
-                "key": f"shorts/short_script_{datetime.now().strftime('%Y-%m-%d')}.md"
+                "key": f"shorts/{short_text_name}" if short_text_name else f"shorts/short_script_{datetime.now().strftime('%Y-%m-%d')}.md"
             }
             sf_client.start_execution(
                 stateMachineArn=sfn_arn,
                 input=json.dumps(sfn_input)
             )
 
-        return {'statusCode': 200, 'body': 'Shorts successfully generated.'}
+        return {
+            'statusCode': 200,
+            's3_bucket': bucket,
+            's3_key': f"shorts/{short_file_name}" if short_file_name else None,
+            's3_audio_key': f"shorts/{short_file_name}" if short_file_name else None,
+            's3_script_key': f"shorts/{short_text_name}" if short_text_name else None,
+            's3_image_key': f"shorts/{image_file_name}" if image_file_name else None,
+            'timestamp': timestamp,
+            'body': json.dumps({
+                'message': 'Shorts successfully generated.',
+                's3_bucket': bucket,
+                's3_key': f"shorts/{short_file_name}" if short_file_name else None,
+                's3_audio_key': f"shorts/{short_file_name}" if short_file_name else None,
+                's3_script_key': f"shorts/{short_text_name}" if short_text_name else None,
+                's3_image_key': f"shorts/{image_file_name}" if image_file_name else None,
+                'timestamp': timestamp
+            })
+        }
     except Exception as e:
-        print(f"Error: {e}")
-        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+        print(f"Error in ShortsGenerator: {e}")
+        raise e
+    finally:
+        if pcm_file_path and os.path.exists(pcm_file_path):
+            try:
+                os.remove(pcm_file_path)
+            except Exception:
+                pass
+        if mp3_file_path and os.path.exists(mp3_file_path):
+            try:
+                os.remove(mp3_file_path)
+            except Exception:
+                pass

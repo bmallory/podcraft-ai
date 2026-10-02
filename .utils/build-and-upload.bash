@@ -86,6 +86,9 @@ elif [ "$FUNCTION_DIR" = "ShortsGenerator" ]; then
 elif [ "$FUNCTION_DIR" = "SpotifyUploader" ]; then
     TIMEOUT=180
     MEMORY=512
+elif [ "$FUNCTION_DIR" = "AudioMixer" ]; then
+    TIMEOUT=300
+    MEMORY=1024
 fi
 
 # Préparer les variables d'environnement pour la Lambda

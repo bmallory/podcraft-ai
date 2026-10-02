@@ -63,11 +63,9 @@ def handler(event, context):
                     schedulingType: automatic,
                     mode: addToQueue,
                     assets: {{
-                      videos: [
-                        {{
-                          url: "{video_url}"
-                        }}
-                      ]
+                      video: {{
+                        url: "{video_url}"
+                      }}
                     }}
                   }}) {{
                     ... on PostActionSuccess {{

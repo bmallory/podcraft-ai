@@ -18,6 +18,7 @@ aws/podcast_pipeline.json
 __pycache__/
 *.py[cod]
 *$py.class
+worker_workspace/
 
 # Media / Temporary Audio & Video
 *.pcm
