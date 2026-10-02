@@ -9,15 +9,72 @@ Grâce à la variabilisation complète via `PROJECT_PREFIX` et `.utils/config.en
 ## 🚀 Architecture & Fonctionnement
 
 ```mermaid
-graph TD
-    A[Déclencheur Quotidien / EventBridge] --> B[Step Function : Master Pipeline]
-    B --> C[Lambda Main : Scraping + Script & Description RSS + Audio MP3]
-    C --> D[Lambda AudioMixer : Mixage Musique de Fond]
-    D -->|S3 Audio Mixé + Markdown| E{PublishAndPromote - Parallèle}
-    E -->|Branche 1| F[Lambda SpotifyUploader : Publication Spotify]
-    E -->|Branche 2| G[Lambda ShortsGenerator : Résumé court + Audio + Visuel IA]
-    G -->|Option Cloud| H[Step Function Vidéo / Veo]
-    G -->|Option Local GPU| I[File SQS + worker_sqs_local.py]
+flowchart TD
+    subgraph Trigger["Déclenchement"]
+        EB["EventBridge (Règle Cron quotidienne)"]
+    end
+
+    subgraph MasterSFN["Step Function : Master Pipeline (PipelineStateMachine)"]
+        direction TB
+        S1["1. Lambda Main : Scraping, Script Gemini 3.7, Description RSS, Audio MP3"]
+        S2["2. Lambda AudioMixer : Mixage dynamique avec musique de fond S3"]
+        
+        subgraph ParallelStep["3. État Parallèle : PublishAndPromote"]
+            direction TB
+            subgraph BranchSpotify["Branche 1 : Diffusion Podcast"]
+                SP["Lambda SpotifyUploader : Publication Spotify via CLI"]
+            end
+
+            subgraph BranchShorts["Branche 2 : Promo Réseaux Sociaux"]
+                SG["Lambda ShortsGenerator : Résumé court, Audio TTS, Visuel IA"]
+                VW["Tâche StartVideoWorkflow : Déclenchement du workflow vidéo"]
+                SG --> VW
+            end
+        end
+
+        S1 -->|Audio brut + Script + RSS| S2
+        S2 -->|Audio mixé final| ParallelStep
+    end
+
+    subgraph VideoSFN["Step Function : Video Generator (VideoGeneratorStateMachine)"]
+        direction TB
+        VS["Lambda VideoSplitter : Découpage du script court en segments"]
+        CS{"CheckSkip : Fichier court valide ?"}
+        VG["Map VideoChunkGenerator : Génération des clips vidéo via Google Veo"]
+        VA["Lambda VideoAssembler : Concaténation verticale 9:16 via FFmpeg"]
+        
+        VS --> CS
+        CS -->|Oui| VG
+        VG --> VA
+        CS -->|Non| SkipEnd["Fin (Skip)"]
+    end
+
+    subgraph LocalWorker["Option Alternative : Worker Local GPU"]
+        SQS["File AWS SQS (Jobs avec Task Token)"]
+        GPU["worker_sqs_local.py (Inférence locale : ComfyUI / Diffusers / Wan2.1)"]
+        SQS --> GPU
+    end
+
+    subgraph StorageAndExt["Stockage S3 & Services IA"]
+        S3[("Amazon S3 : Audios, Scripts, RSS HTML, Musique, Visuels, Vidéos")]
+        Gemini["API Google Gemini : Gemini 3.7 Flash, Gemini TTS, Imagen 3, Veo"]
+        SpotifyAPI["Spotify API (save-to-spotify CLI & Secrets Manager)"]
+    end
+
+    EB --> MasterSFN
+    VW -->|Exécute| VideoSFN
+    SG -.->|Option Worker GPU| SQS
+
+    S1 <-->|Synthèse & Audio| Gemini
+    S1 -->|Stocke Script & Audio| S3
+    S2 <-->|Lit musique & Écrit MP3 mixé| S3
+    SP <-->|Publie épisode| SpotifyAPI
+    SP -.->|Lit MP3 mixé| S3
+    SG <-->|Génération court, voix, image| Gemini
+    SG -->|Stocke assets court| S3
+    VG <-->|Génération clips vidéo| Gemini
+    VA -->|Stocke vidéo finale| S3
+    GPU <-->|Télécharge assets & Téléverse vidéo| S3
 ```
 
 ### Modules inclus :
